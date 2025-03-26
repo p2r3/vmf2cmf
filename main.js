@@ -1,8 +1,70 @@
 const { $ } = require("bun");
-const vmfparser = require("./vmfparser/src/index");
+const fs = require("node:fs");
+const unzipper = require("unzipper");
+
+// Download Narbacular Drop level creation kit on for first launch
+const toolsPath = `${__dirname}/nb_tools`;
+if (!fs.existsSync(toolsPath)) {
+
+  console.log("Downloading Narbacular Drop level creation kit...");
+  const response = await fetch("https://nuclearmonkeysoftware.com/downloads/narbacular_drop_level_creation_kit.zip");
+  if (response.status !== 200) {
+    throw "Failed to download level creation kit, HTTP status " + response.status;
+  }
+  const buffer = await response.arrayBuffer();
+
+  // Create the output directory and file only when the download succeeds
+  fs.mkdirSync(toolsPath);
+  await Bun.write(`${toolsPath}/kit.zip`, buffer);
+
+  // Extract the archive
+  console.log("Extracting...");
+  const archive = await unzipper.Open.file(`${toolsPath}/kit.zip`);
+  await archive.extract({ path: toolsPath });
+
+  // Remove unnecessary files
+  await $`rm "${toolsPath}/kit.zip"`.quiet();
+  await $`rm "${toolsPath}/Read Me.txt"`.quiet();
+  await $`rm -rf "${toolsPath}/FGDs"`.quiet();
+  await $`rm -rf "${toolsPath}/RMF"`.quiet();
+  await $`mv "${toolsPath}/WADs/narbaculardrop.wad" "${toolsPath}/narbaculardrop.wad"`.quiet();
+  await $`mv "${toolsPath}/Map Parser/csg.exe" "${toolsPath}/csg.exe"`.quiet();
+  await $`rm -rf "${toolsPath}/WADs"`.quiet();
+  await $`rm -rf "${toolsPath}/Map Parser"`.quiet();
+
+}
+
+// Ideally this would be an npm dependency, but the import seems broken
+const vmfParserPath = `${__dirname}/vmfparser`;
+if (!fs.existsSync(vmfParserPath)) {
+
+  console.log("Downloading vmfparser (by @leops)...");
+  // We need this commit specifically, the TS refactor broke something
+  const response = await fetch("https://github.com/leops/vmfparser/archive/79fe5e3af8917eb09cb36566eb3f5a8109d23efa.zip");
+  if (response.status !== 200) {
+    throw "Failed to download vmfparser, HTTP status " + response.status;
+  }
+  const buffer = await response.arrayBuffer();
+
+  // Create the output file only when the download succeeds
+  await Bun.write(`${__dirname}/vmfparser.zip`, buffer);
+
+  // Extract the archive
+  console.log("Extracting...");
+  const archive = await unzipper.Open.file(`${__dirname}/vmfparser.zip`);
+  await archive.extract({ path: __dirname });
+  // The archive extracts to a subdirectory, we rename that
+  await $`mv "${__dirname}/vmfparser-79fe5e3af8917eb09cb36566eb3f5a8109d23efa" "${vmfParserPath}"`.quiet();
+  // Remove the archive after extracting
+  await $`rm "${__dirname}/vmfparser.zip"`;
+
+}
+// Include vmfparser library downloaded above
+const vmfparser = require(`${vmfParserPath}/src/index`);
 
 // Get input/output file paths from command line
 const inputFilePath = process.argv[2];
+if (!inputFilePath) throw "Please provide an input VMF path.";
 // If no output path was provided, use renamed input path
 const outputFilePath = process.argv[3] || (inputFilePath.replace(".vmf", "") + ".cmf");
 
@@ -370,11 +432,16 @@ for (const solid of json.world.solid) {
 output = `{
 "classname" "worldspawn"
 "mapversion" "220"
-"wad" "${__dirname}/narbaculardrop.wad"
+"wad" "${toolsPath}/narbaculardrop.wad"
 }
 ${output}`;
 
 // Write out the .map file and parse it with csg.exe
 const mapFilePath = inputFilePath.replace(".vmf", "") + ".map";
 await Bun.write(mapFilePath, output);
-await $`wine "${__dirname}/csg.exe" "${mapFilePath}" "${outputFilePath}"`;
+// On Linux, run csg.exe with Wine
+if (process.platform === "linux") {
+  await $`wine "${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`;
+} else {
+  await $`"${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`;
+}
