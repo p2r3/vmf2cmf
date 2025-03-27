@@ -524,7 +524,7 @@ function parseEditorEntity (entity) {
 function parseHammerEntity (entity) {
 
   // Get the origin as a Vector
-  const origin = Vector.fromString(entity.origin);
+  const origin = entity.origin ? Vector.fromString(entity.origin) : new Vector();
   origin.scale(unitScale);
 
   if (entity.targetname === "@entry_door" || entity.targetname === "door_0-testchamber_door") {
