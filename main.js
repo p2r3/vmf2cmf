@@ -535,8 +535,8 @@ function parseHammerEntity (entity) {
       _b: Math.floor(_light[2] * brightness),
       _range: 500,
       _x: fvec.x,
-      _y: fvec.y,
-      _z: fvec.z
+      _y: fvec.z,
+      _z: -fvec.y
     });
   } else if (false) {
     // See `parseEditorEntity` for notes about faith plate implementation.
