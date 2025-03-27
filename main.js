@@ -623,12 +623,11 @@ function parseHammerEntity (entity) {
       _y: fvec.z,
       _z: -fvec.y
     });
-  } else if (false) {
+  } else if (entity.model && entity.model.startsWith("models/props/faith_plate")) {
     // See `parseEditorEntity` for notes about faith plate implementation.
-    origin.add(new Vector(0, 0, -64 * unitScale));
     createEntity({
       classname: "boulder",
-      origin,
+      origin: origin.add(new Vector(0, 0, -48 * unitScale)),
       speed: -1,
       axis_choice: 5
     });
@@ -644,7 +643,7 @@ for (const entity of json.entity) {
    * solids list to be handled later as a regular brush. Narbacular Drop
    * has no support for dynamic brushes, anyway.
    */
-  if ("solid" in entity) {
+  if ("solid" in entity && typeof entity.solid === "object") {
     json.world.solid.push(entity.solid);
     continue;
   }
