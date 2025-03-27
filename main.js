@@ -266,8 +266,8 @@ class Side {
   static fromString (plane, uaxis, vaxis, rotation, material) {
     return new Side(
       Plane.fromString(plane),
-      uaxis.replaceAll("[", "").replaceAll("]", "").split(" ").map(Number),
-      vaxis.replaceAll("[", "").replaceAll("]", "").split(" ").map(Number),
+      uaxis.replaceAll("[", "").replaceAll("]", "").replaceAll("  ", " ").split(" ").map(Number),
+      vaxis.replaceAll("[", "").replaceAll("]", "").replaceAll("  ", " ").split(" ").map(Number),
       rotation || 0,
       material || "AAATRIGGER"
     );
@@ -292,6 +292,8 @@ class Side {
     for (let i = 0; i < this.plane.points.length; i ++) {
       this.plane.points[i].scale(factor);
     }
+    this.uparams[4] *= factor;
+    this.vparams[4] *= factor;
     return this;
   }
 
