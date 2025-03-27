@@ -69,6 +69,12 @@ if (!inputFilePath) throw "Please provide an input VMF path.";
 // If no output path was provided, use renamed input path
 const outputFilePath = process.argv[3] || (inputFilePath.replace(".vmf", "") + ".cmf");
 
+// Fetch material lists separated by relevant surface properties
+const surfaceProperties = {
+  noportal: (await Bun.file(`${toolsPath}/noportal.txt`).text()).split("\n"),
+  seethrough: (await Bun.file(`${toolsPath}/seethrough.txt`).text()).split("\n")
+};
+
 // Parse the VMF data to JSON
 const vmf = await Bun.file(inputFilePath).text();
 const json = vmfparser(vmf);
@@ -225,17 +231,42 @@ class Plane {
 }
 
 /**
- * Given a Portal 2 material, returns the corresponding ND texture.
- * Assumes that textures were generated with vpk2wad_nd - texture name
- * is obtained by md5-hashing the material path.
+ * Defines a Portal 2 material with relevant surface properties and
+ * equivalent Narbacular Drop texture name.
  *
- * @param {string} material Portal 2 material path
- * @returns {string} Narbacular Drop texture
+ * Assumes that textures were generated with vpk2wad_nd - Narbacular Drop
+ * texture name is obtained by md5-hashing the Portal 2 material path.
  */
-function convertMaterial (material) {
-  material = material.toLowerCase().replace("\\", "/");
-  if (material.startsWith("tools/")) return "AAATRIGGER";
-  return crypto.createHash("md5").update(material).digest("hex").slice(0, 15);
+class Material {
+
+  // Holds a mapping between encountered materials and their hashes
+  static map = {};
+
+  // Given a Portal 2 material path, returns the corresponding ND texture.
+  static convert (path) {
+    if (path.startsWith("tools/")) return "AAATRIGGER";
+    if (path.startsWith("effects/")) return "AAATRIGGER";
+    return crypto.createHash("md5").update(path).digest("hex").slice(0, 15);
+  }
+
+  // Constructs the Material instance from a Portal 2 material path
+  constructor (p2Material) {
+    this.p2Material = p2Material.toLowerCase().replace("\\", "/");
+    this.nbTexture = Material.convert(this.p2Material);
+    this.noportal = surfaceProperties.noportal.includes(this.p2Material);
+    this.seethrough = surfaceProperties.seethrough.includes(this.p2Material);
+    Material.map[this.nbTexture] = this.p2Material;
+  }
+
+  // Placeholder for empty textures
+  static AAATRIGGER = new Material("tools/toolsnodraw");
+  // Placeholder for missing texures
+  static MISSING = new Material("metal/black_wall_metal_001d");
+
+  toString () {
+    return this.nbTexture;
+  }
+
 }
 
 /**
@@ -258,11 +289,11 @@ class Side {
       uaxis.replaceAll("[", "").replaceAll("]", "").replaceAll("  ", " ").split(" ").map(Number),
       vaxis.replaceAll("[", "").replaceAll("]", "").replaceAll("  ", " ").split(" ").map(Number),
       rotation || 0,
-      material || "AAATRIGGER"
+      material ? new Material(material) : Material.AAATRIGGER
     );
   }
   static fromVMF (side) {
-    return Side.fromString(side.plane, side.uaxis, side.vaxis, side.rotation, convertMaterial(side.material));
+    return Side.fromString(side.plane, side.uaxis, side.vaxis, side.rotation, side.material);
   }
   toString () {
     return (
@@ -580,12 +611,12 @@ for (const solid of json.world.solid) {
     // If this side isn't axis aligned, the solid can't be a wall
     if (axis === null) isWall = false;
 
-    // If at least one of the materials is rock, a collidable_geometry
+    // If at least one of the materials is portalable, a collidable_geometry
     // created from this brush would have to be portalable.
-    if (side.material.startsWith("ROCK_")) portalable = true;
-    // If at least one of the materials is chainlink, this is a seethrough
-    // collidable_geometry and therefore also cannot be a wall.
-    else if (side.material === "CHAINLINK") {
+    if (!side.material.noportal) portalable = true;
+    // If at least one of the materials is seethrough, this must be a
+    // collidable_geometry and therefore cannot be a wall.
+    if (side.material.seethrough) {
       seethrough = true;
       isWall = false;
     }
@@ -603,12 +634,12 @@ for (const solid of json.world.solid) {
       const axis = axes[i];
 
       // Skip faces that aren't going to be rendered anyway
-      if (side.material === "AAATRIGGER") continue;
+      if (side.material.toString() === "AAATRIGGER") continue;
 
       // Define the brush entity and add it to the output map file string
       output += `{\n"classname" "func_wall"\n`;
       output += `"axis_choice" "${axis}"\n`;
-      output += `"wall_type" "${side.material.startsWith("ROCK_") ? 0 : 1}"\n`;
+      output += `"wall_type" "${side.material.noportal ? 1 : 0}"\n`;
       output += "{\n";
       output += solidSides.join("\n");
       output += "\n}\n}\n";
@@ -651,12 +682,13 @@ do {
   // If a texture failed to be found, replace it and try again
   if (stdout) {
     const texture = stdout.split("Unable to find texture ")[1].split("!")[0];
-    // If the missing texture is AAATRIGGER, something has gone wrong
-    if (texture === "AAATRIGGER") {
+    console.warn(`Recompiling without ${texture} (${Material.map[texture]})...`);
+    // If the placeholder texture is missing, something has gone wrong
+    if (texture === Material.MISSING.toString()) {
       console.error("Aborting: WAD is missing crucial textures.");
       break;
     }
-    output = output.replaceAll(texture, "AAATRIGGER");
+    output = output.replaceAll(texture, Material.MISSING.toString());
     await Bun.write(mapFilePath, output);
   }
   // On Linux, run csg.exe with Wine
