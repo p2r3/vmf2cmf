@@ -562,23 +562,23 @@ function parseHammerEntity (entity) {
       }
     }
     buttonCount ++;
-  } else if (entity.targetname === "@exit_door" || entity.targetname === "@exit_door-testchamber_door") {
-    /**
-     * The exit door maps to `level_end`. Since the exit cannot be rotated,
-     * this is temporarily disabled to prevent severe glitches.
-     */
-    return;
-    createEntity({
-      classname: "level_end",
-      origin: origin.add(new Vector(0, 96 * unitScale, 128)),
-      targetname: "exit_door",
-      next_level: "Levels/LongHaul.cmf"
-    });
+  } else if (entity.classname === "prop_testchamber_door") {
+    // No idea how to implement doors, currently just places a grate
+    const bpos = origin.copy().add(new Vector(0, 0, 64 * unitScale));
+    const fvec = Vector.fromAngles(Vector.fromString(entity.angles));
+    const rvec = fvec.cross(new Vector(0, 0, 1));
+    const size = new Vector(4 + Math.abs(rvec.x) * 64, 4 + Math.abs(rvec.y) * 64, 64);
+    size.scale(unitScale);
+    createBrush({
+      classname: "collidable_geometry",
+      sfx_type: 1,
+      spawnflags: 1
+    }, bpos, size, new Material("metal/metalgrate018"));
   } else if (entity.classname === "prop_weighted_cube") {
     /**
      * Cubes map to crates. This also includes cubes in droppers, unless
      * the dropper is an instance in an original (non-decompiled) VMF.
-     * For more notes, again, see `parseEditorEntity`.
+     * For more notes, see `parseEditorEntity`.
      */
     createEntity({
       classname: "crate",
