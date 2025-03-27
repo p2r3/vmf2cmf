@@ -362,6 +362,71 @@ function createBrush (keyvalues, origin, size, texture = "AAATRIGGER") {
 }
 
 /**
+ * Resolves an I/O chain and returns an array of destination
+ * entities targeted by the given outputs.
+ *
+ * @param {string|array} outputs Connection output from entity.connections
+ * @param {array} [entities=[]] Existing list of targets to append to
+ * @returns {array} Destination VMF entities - targets of I/O chain
+ */
+function traceConnection (outputs, entities = []) {
+
+  // If no outputs were provided, assume the connection is missing
+  if (!outputs) return [];
+  // Ensure we're dealing with an array of outputs
+  if (!Array.isArray(outputs)) outputs = [outputs];
+
+  // Iterate over all outputs, building the list of target entities
+  for (const output of outputs) {
+
+    // Parse the output string to retrieve individual arguments
+    const [ targetQuery, input, value, delay ] = output.split("\x1B");
+    const target = targetQuery.toLowerCase();
+
+    /**
+     * Find the targeted entity. Looking for only the first one should
+     * suffice in most cases, as targetnames are typically unique, and if
+     * searching by classname, we only care about the classname anyway.
+     */
+    const entity = json.entity.find(curr => {
+      if (curr.targetname && curr.targetname.toLowerCase() === target) return true;
+      return curr.classname === target;
+    });
+    // If no target was found, return what we have
+    if (!entity) return entities;
+
+    // Handle the entity based on its classname
+    switch (entity.classname) {
+      case "logic_relay":
+        // Relays map Trigger to OnTrigger
+        if (input.toLowerCase() === "trigger") {
+          entities = traceConnection(entity.connections.OnTrigger, entities);
+        }
+        break;
+      case "func_instance_io_proxy":
+        // Proxy outputs are forwarded directly
+        entities = traceConnection(entity.connections[input], entities);
+        break;
+      default:
+        // Fall back to checking for FireUser, which all entities can use
+        if (input.toLowerCase().startsWith("fireuser")) {
+          const index = input.slice(8);
+          entities = traceConnection(entity.connections["OnUser" + index]);
+          break;
+        }
+        // If output cannot be forwarded, assume we've found a destination
+        entities.push(entity);
+        break;
+    }
+
+  }
+
+  // Return constructed list of connection targets
+  return entities;
+
+}
+
+/**
  * Given a Source entity from a PTI map, converts it to its equivalent in
  * Narbacular Drop and appends its data to the output string.
  *
@@ -474,8 +539,28 @@ function parseHammerEntity (entity) {
       classname: "button_standard",
       origin,
       weight: 100,
-      target: "exit_counter"
+      target: `button${buttonCount}_counter`
     });
+    // Find the entities targeted by this button
+    if (entity.connections) {
+      // Merge both the OnPressed and OnUnPressed outputs
+      // This is because NB buttons activate/deactivate targets equally
+      const targets = traceConnection(entity.connections.OnPressed);
+      const targetsUnpressed = traceConnection(entity.connections.OnUnPressed);
+      for (const target of targetsUnpressed) {
+        if (!targets.includes(target)) targets.push(target);
+      }
+      // Create counters of threshold 1 to simulate a relay for each output
+      for (const target of targets) {
+        createEntity({
+          classname: "counter",
+          targetname: `button${buttonCount}_counter`,
+          target: target.targetname,
+          threshold: 1,
+          origin
+        });
+      }
+    }
     buttonCount ++;
   } else if (entity.targetname === "@exit_door" || entity.targetname === "@exit_door-testchamber_door") {
     /**
