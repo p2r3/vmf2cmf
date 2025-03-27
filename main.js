@@ -35,6 +35,9 @@ if (!fs.existsSync(toolsPath)) {
 
 }
 
+// Whether to use built-in textures - inferred from size of WAD
+const useDefaultTextures = Bun.file(`${toolsPath}/narbaculardrop.wad`).size === 4711484;
+
 // Ideally this would be an npm dependency, but the import seems broken
 const vmfParserPath = `${__dirname}/vmfparser`;
 if (!fs.existsSync(vmfParserPath)) {
@@ -70,9 +73,12 @@ if (!inputFilePath) throw "Please provide an input VMF path.";
 const outputFilePath = process.argv[3] || (inputFilePath.replace(".vmf", "") + ".cmf");
 
 // Fetch material lists separated by relevant surface properties
-const surfaceProperties = {
+const surfaceProperties = useDefaultTextures ? {
   noportal: (await Bun.file(`${toolsPath}/noportal.txt`).text()).split("\n"),
   seethrough: (await Bun.file(`${toolsPath}/seethrough.txt`).text()).split("\n")
+} : {
+  noportal: ["CHAINLINK", "METAL_PANEL1", "METAL_PANEL2", "METAL_PANEL3", "METAL_PANEL4"],
+  seethrough: ["CHAINLINK"]
 };
 
 // Parse the VMF data to JSON
@@ -234,7 +240,7 @@ class Plane {
  * Defines a Portal 2 material with relevant surface properties and
  * equivalent Narbacular Drop texture name.
  *
- * Assumes that textures were generated with vpk2wad_nd - Narbacular Drop
+ * When using textures generated with vpk2wad_nd, the Narbacular Drop
  * texture name is obtained by md5-hashing the Portal 2 material path.
  */
 class Material {
@@ -246,6 +252,15 @@ class Material {
   static convert (path) {
     if (path.startsWith("tools/")) return "AAATRIGGER";
     if (path.startsWith("effects/")) return "AAATRIGGER";
+    if (useDefaultTextures) {
+      if (path.startsWith("metal/black")) return "METAL_PANEL1";
+      if (path.startsWith("tile/white_wall")) return "ROCK_WALL1";
+      if (path.startsWith("tile/white_floor")) return "DIRT_FLOOR3";
+      if (path.startsWith("tile/underground_white")) return "ROCK_WALL2";
+      if (path.includes("metalgrate")) return "CHAINLINK";
+      if (path.includes("concrete")) return "CONCRETE";
+      return "AAATRIGGER";
+    }
     return crypto.createHash("md5").update(path).digest("hex").slice(0, 15);
   }
 
@@ -253,8 +268,8 @@ class Material {
   constructor (p2Material) {
     this.p2Material = p2Material.toLowerCase().replace("\\", "/");
     this.nbTexture = Material.convert(this.p2Material);
-    this.noportal = surfaceProperties.noportal.includes(this.p2Material);
-    this.seethrough = surfaceProperties.seethrough.includes(this.p2Material);
+    this.noportal = surfaceProperties.noportal.includes(useDefaultTextures ? this.p2Material : this.nbTexture);
+    this.seethrough = surfaceProperties.seethrough.includes(useDefaultTextures ? this.p2Material : this.nbTexture);
     Material.map[this.nbTexture] = this.p2Material;
   }
 
