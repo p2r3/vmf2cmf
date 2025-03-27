@@ -1,5 +1,6 @@
 const { $ } = require("bun");
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const unzipper = require("unzipper");
 
 // Download Narbacular Drop level creation kit on for first launch
@@ -225,28 +226,16 @@ class Plane {
 
 /**
  * Given a Portal 2 material, returns the corresponding ND texture.
+ * Assumes that textures were generated with vpk2wad_nd - texture name
+ * is obtained by md5-hashing the material path.
  *
  * @param {string} material Portal 2 material path
  * @returns {string} Narbacular Drop texture
  */
 function convertMaterial (material) {
   material = material.toLowerCase().replace("\\", "/");
-  if (material.startsWith("tile/white_floor_tile")) return "ROCK_FLOOR1";
-  if (material.startsWith("tile/white_wall_tile")) return "ROCK_WALL1";
-  if (material.startsWith("metal/black_floor_metal")) return "METAL_PANEL2";
-  if (material.startsWith("metal/black_wall_metal")) return "METAL_PANEL1";
-  if (material === "anim_wp/framework/backpanels_cheap") return "METAL_PANEL3";
-  if (material === "anim_wp/framework/squarebeams") return "METAL_PANEL3";
-  if (material === "glass/glasswindow007a_less_shiny") return "CHAINLINK";
-  if (material === "metal/metalgrate018") return "CHAINLINK";
   if (material.startsWith("tools/")) return "AAATRIGGER";
-  /**
-   * For unrecognized textures, we return AAATRIGGER on PTI maps, but
-   * Hammer maps likely do actually have a solid there, so we return
-   * CHAINLINK to indicate an obvious placeholder.
-   */
-  if (isPTI) return "AAATRIGGER";
-  return "CHAINLINK";
+  return crypto.createHash("md5").update(material).digest("hex").slice(0, 15);
 }
 
 /**
@@ -653,12 +642,28 @@ output = `{
 }
 ${output}`;
 
-// Write out the .map file and parse it with csg.exe
+// Write out the .map file for parsing with csg.exe
 const mapFilePath = inputFilePath.replace(".vmf", "") + ".map";
 await Bun.write(mapFilePath, output);
-// On Linux, run csg.exe with Wine
-if (process.platform === "linux") {
-  await $`wine "${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`;
-} else {
-  await $`"${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`;
-}
+
+let stdout = "";
+do {
+  // If a texture failed to be found, replace it and try again
+  if (stdout) {
+    const texture = stdout.split("Unable to find texture ")[1].split("!")[0];
+    // If the missing texture is AAATRIGGER, something has gone wrong
+    if (texture === "AAATRIGGER") {
+      console.error("Aborting: WAD is missing crucial textures.");
+      break;
+    }
+    output = output.replaceAll(texture, "AAATRIGGER");
+    await Bun.write(mapFilePath, output);
+  }
+  // On Linux, run csg.exe with Wine
+  const cmd = await $`${process.platform === "linux" ? "wine" : ""} "${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`.quiet();
+  stdout = cmd.stdout.toString();
+  // Continue recompiling until texture issues are gone
+} while (stdout.includes("Unable to find texture "));
+
+// Display only the final command output
+console.log(stdout);
