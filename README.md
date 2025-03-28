@@ -1,8 +1,9 @@
 # vmf2cmf
 Backports Portal 2 maps to Narbacular Drop.
 
-![image](https://github.com/user-attachments/assets/a8c2838e-da6f-4fb2-90ff-c099fbaa88b2)
-![image](https://github.com/user-attachments/assets/6c493972-13ae-4929-9b86-05b84f8b8944)
+![image](https://github.com/user-attachments/assets/6d43dd2f-5a19-4926-a76d-ae647b27ef15)
+![image](https://github.com/user-attachments/assets/1fbd59c4-f43a-4ff5-b12e-d707bc5b7c4a)
+
 
 ## Setup and basic usage
 0. This project requires the [Bun runtime](https://bun.sh/) and is designed to run on Linux. It will likely work on Windows with few or no changes, but this has not been tested. Setting up a WSL instance is the simplest option.
