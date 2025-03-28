@@ -454,6 +454,47 @@ function traceConnection (outputs, entities = []) {
 
 }
 
+// Amount of physical "gate" contraptions present in the world, see below
+let gateCount = 0;
+
+/**
+ * Constructs a "NOT" gate and appends it to the output map file.
+ *
+ * @param {string} input Targetname of the gate
+ * @param {string} output Name of entity targeted by the gate
+ */
+function createNotGate (input, output) {
+
+  // Place the gate far outside of world bounds, offset by `gateCount`
+  const origin = new Vector(65536 - 512 * gateCount, 65536, 65536);
+
+  // Solid floor geometry for the button and turtle
+  createBrush({
+    classname: "collidable_geometry",
+    sfx_type: 1
+  }, origin.copy().add(new Vector(0, 0, 8)), new Vector(96, 96, 8), Material.MISSING);
+  // Button entity, set to target the gate's output
+  createEntity({
+    classname: "button_standard",
+    target: output,
+    origin
+  });
+  // Turtle - holds down button on spawn, moves away when lava rises
+  createEntity({
+    classname: "lava_turtle",
+    speed: 0,
+    origin: origin.copy().add(new Vector(0, 0, 48))
+  });
+  // Lava for moving the turtle out of the way, named as the gate's input
+  createBrush({
+    classname: "func_lava",
+    targetname: input
+  }, origin.add(new Vector(0, 0, -12)), new Vector(96, 96, 16), Material.AAATRIGGER);
+
+  gateCount ++;
+
+}
+
 /**
  * Given a Source entity from a PTI map, converts it to its equivalent in
  * Narbacular Drop and appends its data to the output string.
@@ -566,7 +607,7 @@ function parseHammerEntity (entity) {
     createEntity({
       classname: "button_standard",
       origin,
-      weight: 100,
+      weight_needed: 100,
       target: `button${buttonCount}_counter`
     });
     // Find the entities targeted by this button
@@ -591,17 +632,36 @@ function parseHammerEntity (entity) {
     }
     buttonCount ++;
   } else if (entity.classname === "prop_testchamber_door") {
-    // No idea how to implement doors, currently just places a grate
+    /**
+     * Doors are replaced with "reset triggers" connected to a NOT gate.
+     * This effectively means that attempting to pass through a door will
+     * restart the level unless that door has received the input to open.
+     */
+    // Calculate proportions of door trigger
     const bpos = origin.copy().add(new Vector(0, 0, 64 * unitScale));
     const fvec = Vector.fromAngles(Vector.fromString(entity.angles));
     const rvec = fvec.cross(new Vector(0, 0, 1));
     const size = new Vector(4 + Math.abs(rvec.x) * 64, 4 + Math.abs(rvec.y) * 64, 64);
     size.scale(unitScale);
+    // Create the door trigger, link it to a counter
     createBrush({
-      classname: "collidable_geometry",
-      sfx_type: 1,
-      spawnflags: 1
-    }, bpos, size, new Material("metal/metalgrate018"));
+      classname: "area_trigger",
+      targetname: entity.targetname + "__NDtrigger",
+      target: entity.targetname + "__NDcounter"
+    }, bpos, size, Material.AAATRIGGER);
+    // Create the counter - this is linked to the trigger and the gate
+    createEntity({
+      classname: "counter",
+      targetname: entity.targetname + "__NDcounter",
+      target: "PlayerRespawn",
+      threshold: 2
+    });
+    /**
+     * Create the NOT gate - when activated, this "subtracts" from the
+     * counter, disabling the reset trigger, as the trigger alone cannot
+     * satisfy the condition of the counter.
+     */
+    createNotGate(entity.targetname, entity.targetname + "__NDcounter");
   } else if (entity.classname === "prop_weighted_cube") {
     /**
      * Cubes map to crates. This also includes cubes in droppers, unless
@@ -659,6 +719,20 @@ function parseHammerEntity (entity) {
       speed: -1,
       axis_choice: 5
     });
+  } else if (entity.classname === "math_counter") {
+    // Both games have very similar "counter" entities, almost a direct mapping
+    const min = Number(entity.min) || 0;
+    const max = Number(entity.max) || 0;
+    const targets = traceConnection(entity.connections.OnHitMax);
+    for (const target of targets) {
+      createEntity({
+        classname: "counter",
+        targetname: entity.targetname,
+        target: target.targetname,
+        threshold: max - min,
+        origin
+      });
+    }
   }
 
 }
