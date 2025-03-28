@@ -73,7 +73,7 @@ if (!inputFilePath) throw "Please provide an input VMF path.";
 const outputFilePath = process.argv[3] || (inputFilePath.replace(".vmf", "") + ".cmf");
 
 // Fetch material lists separated by relevant surface properties
-const surfaceProperties = useDefaultTextures ? {
+const surfaceProperties = !useDefaultTextures ? {
   noportal: (await Bun.file(`${toolsPath}/noportal.txt`).text()).split("\n"),
   seethrough: (await Bun.file(`${toolsPath}/seethrough.txt`).text()).split("\n")
 } : {
