@@ -366,9 +366,13 @@ function createEntity (keyvalues) {
  * @param {object} keyvalues Table of key/value pairs
  * @param {Vector} origin Center of brush, after unit scaling
  * @param {Vector} size Half-width of brush on all axis, after unit scaling
- * @param {string} [texture="AAATRIGGER"] Texture used for all brush faces
+ * @param {Material|array} [materials] Material for each brush face, ordered X,-X,Y,-Y,Z,-Z
  */
-function createBrush (keyvalues, origin, size, texture = "AAATRIGGER") {
+function createBrush (keyvalues, origin, size, materials = Material.AAATRIGGER) {
+
+  // Ensure we're working with an array of 6 materials, one for each face
+  if (!Array.isArray(materials)) materials = (new Array(6)).fill(materials);
+  while (materials.length < 6) materials.push(Material.AAATRIGGER);
 
   // Define the entity and its keyvalues
   output += "{\n"
@@ -379,12 +383,12 @@ function createBrush (keyvalues, origin, size, texture = "AAATRIGGER") {
   // Huge prebuilt block for defining the brush planes
   // Actually doing the math for this would've been overkill
   output += `{
-( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${texture} [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1 \n\
-( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ${texture} [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1 \n\
-( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ${texture} [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
-( ${size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${texture} [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
-( ${size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ${texture} [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
-( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${texture} [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
+( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${materials[4]} [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1 \n\
+( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ${materials[5]} [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1 \n\
+( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ${materials[1]} [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
+( ${size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${materials[0]} [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
+( ${size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ${materials[2]} [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
+( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${materials[3]} [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
 }\n}\n`;
 
 }
@@ -649,7 +653,21 @@ function parseHammerEntity (entity) {
       targetname: entity.targetname + "__NDtrigger",
       target: entity.targetname + "__NDcounter"
     }, bpos, size, Material.AAATRIGGER);
-    // Create the counter - this is linked to the trigger and the gate
+    /**
+     * Create a portal blocker and a one-way gate for the door to prevent
+     * the player from shooting past the door. This is done by creating a
+     * brush with only one textured face, facing oppsite the door.
+     */
+    let blockerMaterials = (new Array(6)).fill(Material.AAATRIGGER);
+    if (fvec.near(new Vector(1, 0, 0))) blockerMaterials[1] = Material.MISSING;
+    else if (fvec.near(new Vector(-1, 0, 0))) blockerMaterials[0] = Material.MISSING;
+    else if (fvec.near(new Vector(0, 1, 0))) blockerMaterials[3] = Material.MISSING;
+    else if (fvec.near(new Vector(0, -1, 0))) blockerMaterials[2] = Material.MISSING;
+    createBrush({
+      classname: "collidable_geometry",
+      sfx_type: 1
+    }, bpos.copy().sub(fvec.copy().scale(16 * unitScale)), size, blockerMaterials);
+    // Create the counter, activated by the trigger and the gate
     createEntity({
       classname: "counter",
       targetname: entity.targetname + "__NDcounter",
