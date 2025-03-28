@@ -252,13 +252,26 @@ class Material {
   static convert (path) {
     if (path.startsWith("tools/")) return "AAATRIGGER";
     if (path.startsWith("effects/")) return "AAATRIGGER";
+    if (path.startsWith("dev/")) return "AAATRIGGER";
     if (useDefaultTextures) {
       if (path.startsWith("metal/black")) return "METAL_PANEL1";
       if (path.startsWith("tile/white_wall")) return "ROCK_WALL1";
       if (path.startsWith("tile/white_floor")) return "DIRT_FLOOR3";
       if (path.startsWith("tile/underground_white")) return "ROCK_WALL2";
-      if (path.includes("metalgrate")) return "CHAINLINK";
-      if (path.includes("concrete")) return "CONCRETE";
+      if (path.startsWith("anim_wp/framework")) return "METAL_PANEL1";
+      if (path.startsWith("plaster/")) return "METAL_PANEL1";
+      if (path.startsWith("tile/")) return "ROCK_WALL1";
+      if (path.startsWith("elevator/")) return "METAL_PANEL3";
+      if (path.startsWith("nature/")) return "DIRT_FLOOR2";
+      if (path.includes("plastic")) return "METAL_PANEL1";
+      if (path.includes("carpet")) return "CEILING";
+      if (path.includes("signage")) return "CONCRETE";
+      if (path.includes("lights")) return "CONCRETE";
+      if (path.includes("concrete")) return "DIRT_FLOOR1";
+      if (path.includes("grate")) return "CHAINLINK";
+      if (path.includes("glass")) return "CHAINLINK";
+      if (path.includes("wood")) return "METAL_PANEL1";
+      if (path.includes("metal")) return "METAL_PANEL2";
       return "AAATRIGGER";
     }
     return crypto.createHash("md5").update(path).digest("hex").slice(0, 15);
