@@ -804,7 +804,7 @@ do {
     await Bun.write(mapFilePath, output);
   }
   // On Linux, run csg.exe with Wine
-  const cmd = await $`${process.platform === "linux" ? "wine" : ""} "${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`.quiet();
+  const cmd = await $`${process.platform === "linux" ? "wine " : ""}"${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`.quiet();
   stdout = cmd.stdout.toString();
   // Continue recompiling until texture issues are gone
 } while (stdout.includes("Unable to find texture "));
