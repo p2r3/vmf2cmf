@@ -463,11 +463,15 @@ let gateCount = 0;
 
 /**
  * Constructs a "NOT" gate and appends it to the output map file.
+ * The gate actively sends triggers to the `output` by default. Once
+ * triggered, after a short delay, it stops sending triggers indefinitely,
+ * and the `indicator` entity gets triggered exactly once.
  *
  * @param {string} input Targetname of the gate
  * @param {string} output Name of entity targeted by the gate
+ * @param {string} [indicator] Entity to trigger after gate flips (once)
  */
-function createNotGate (input, output) {
+function createNotGate (input, output, indicator = null) {
 
   // Place the gate far outside of world bounds, offset by `gateCount`
   const origin = new Vector(65536 - 512 * gateCount, 65536, 65536);
@@ -493,7 +497,16 @@ function createNotGate (input, output) {
   createBrush({
     classname: "func_lava",
     targetname: input
-  }, origin.add(new Vector(0, 0, -12)), new Vector(96, 96, 16), Material.AAATRIGGER);
+  }, origin.copy().add(new Vector(0, 0, -12)), new Vector(96, 96, 16), Material.AAATRIGGER);
+  // Second button, serving as an indicator of the gate being flipped
+  if (indicator) {
+    createEntity({
+      classname: "button_standard",
+      target: indicator,
+      spawnflags: 1,
+      origin: origin.copy().add(new Vector(0, 0, 176))
+    });
+  }
 
   gateCount ++;
 
@@ -636,6 +649,7 @@ function parseHammerEntity (entity) {
     }
     buttonCount ++;
   } else if (entity.classname === "prop_testchamber_door") {
+    if (!entity.targetname.includes("just_enough_door_for_the_job")) return;
     /**
      * Doors are replaced with "reset triggers" connected to a NOT gate.
      * This effectively means that attempting to pass through a door will
@@ -679,7 +693,14 @@ function parseHammerEntity (entity) {
      * counter, disabling the reset trigger, as the trigger alone cannot
      * satisfy the condition of the counter.
      */
-    createNotGate(entity.targetname, entity.targetname + "__NDcounter");
+    createNotGate(entity.targetname, entity.targetname + "__NDcounter", entity.targetname + "__NDtext");
+    // Create a text popup for when the door has opened
+    createEntity({
+      classname: "game_text",
+      targetname: entity.targetname + "__NDtext",
+      message: "A DOOR HAS OPENED",
+      origin
+    });
   } else if (entity.classname === "prop_weighted_cube") {
     /**
      * Cubes map to crates. This also includes cubes in droppers, unless
