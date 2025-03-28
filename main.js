@@ -36,7 +36,7 @@ if (!fs.existsSync(toolsPath)) {
 }
 
 // Whether to use built-in textures - inferred from size of WAD
-const useDefaultTextures = Bun.file(`${toolsPath}/narbaculardrop.wad`).size === 4711484;
+const useDefaultTextures = Bun.file(`${toolsPath}/narbaculardrop.wad`).size === 3362364;
 
 // Ideally this would be an npm dependency, but the import seems broken
 const vmfParserPath = `${__dirname}/vmfparser`;
