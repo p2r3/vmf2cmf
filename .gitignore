@@ -1,3 +1,6 @@
+bun.lock
+node_modules
+
 vmfparser
 nb_tools
 *.cmf
