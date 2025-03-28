@@ -281,8 +281,8 @@ class Material {
   constructor (p2Material) {
     this.p2Material = p2Material.toLowerCase().replace("\\", "/");
     this.nbTexture = Material.convert(this.p2Material);
-    this.noportal = surfaceProperties.noportal.includes(useDefaultTextures ? this.p2Material : this.nbTexture);
-    this.seethrough = surfaceProperties.seethrough.includes(useDefaultTextures ? this.p2Material : this.nbTexture);
+    this.noportal = surfaceProperties.noportal.includes(useDefaultTextures ? this.nbTexture : this.p2Material);
+    this.seethrough = surfaceProperties.seethrough.includes(useDefaultTextures ? this.nbTexture : this.p2Material);
     Material.map[this.nbTexture] = this.p2Material;
   }
 
