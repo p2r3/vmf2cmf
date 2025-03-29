@@ -520,21 +520,18 @@ function createNotGate (input, output, indicator = null) {
  */
 function parseEditorEntity (entity) {
 
-  // PTI uses instances almost exclusively, skip anything that isn't one
-  if (entity.classname !== "func_instance" || !entity.file) return;
-
   // Get the origin as a Vector
   const origin = Vector.fromString(entity.origin);
   origin.scale(unitScale);
 
-  if (entity.file.startsWith("instances/p2editor/door_entrance")) {
+  if (entity.file && entity.file.startsWith("instances/p2editor/door_entrance")) {
     // Entrance doors mark the player's spawn point
     // Elevators are much too complicated and wouldn't work in any way
     createEntity({
       classname: "player_respawn",
       origin
     });
-  } else if (entity.file.startsWith("instances/p2editor/door_exit")) {
+  } else if (entity.file && entity.file.startsWith("instances/p2editor/door_exit")) {
     /**
      * The exit door gets converted to `level_end`.
      * Narbacular Drop makes all exit doors face south, which is why we
@@ -546,17 +543,33 @@ function parseEditorEntity (entity) {
       targetname: "exit_door",
       next_level: "Levels/LongHaul.cmf"
     });
-  } else if (entity.file.startsWith("instances/p2editor/light_strip")) {
+    // Get door counter threshold from instance properties
+    let threshold = 0;
+    for (const key in entity) {
+      if (!(typeof entity[key] === "string")) continue;
+      if (entity[key].startsWith("$connectioncount ")) {
+        threshold = Number(entity[key].slice(17));
+      }
+    }
+    if (threshold === 0) return;
+    // Create a counter with the required threshold
+    createEntity({
+      classname: "counter",
+      targetname: entity.targetname,
+      target: "exit_door",
+      threshold
+    });
+  } else if (entity.file && entity.file.startsWith("instances/p2editor/light_strip") && false) {
     // Player-placed light strips are converted to point lights
     createEntity({
       classname: "light_point",
       origin,
       _r: 120,
       _g: 120,
-      _b: 128,
+      _b: 120,
       _range: 300
     });
-  } else if (entity.file.startsWith("instances/p2editor/cube")) {
+  } else if (entity.file && entity.file.startsWith("instances/p2editor/cube")) {
     /**
      * Cubes are converted to crates, but only if not in a dropper!
      * The weight is set to 150 to allow for emulating cube buttons, as the
@@ -568,21 +581,42 @@ function parseEditorEntity (entity) {
       weight: 150,
       scale: 2.4
     });
-  } else if (entity.file.startsWith("instances/p2editor/floor_button")) {
+  } else if (entity.file && entity.file.startsWith("instances/p2editor/floor_button")) {
     /**
      * Standard floor buttons become `button_standard`, with a weight
-     * tolerance of 100, supporting both the player and cubes. All
-     * buttons target `exit_counter`, which is later set up to expect
-     * `buttonCount` inputs.
+     * tolerance of 100, supporting both the player and cubes.
+     *
+     * TODO: This same code is used in parseHammerEntity with few changes,
+     * maybe there's a neat way to deduplicate?
      */
     createEntity({
       classname: "button_standard",
       origin: origin.add(new Vector(0, 0, -64 * unitScale)),
-      weight: 100,
-      target: "exit_counter"
+      weight_needed: 100,
+      target: `button${buttonCount}_counter`
     });
+    // Find the entities targeted by this button
+    if (entity.connections) {
+      // Merge both the OnPressed and OnUnPressed outputs
+      // This is because NB buttons activate/deactivate targets equally
+      const targets = traceConnection(entity.connections["instance:button;OnPressed"]);
+      const targetsUnpressed = traceConnection(entity.connections["instance:button;OnUnPressed"]);
+      for (const target of targetsUnpressed) {
+        if (!targets.includes(target)) targets.push(target);
+      }
+      // Create counters of threshold 1 to simulate a relay for each output
+      for (const target of targets) {
+        createEntity({
+          classname: "counter",
+          targetname: `button${buttonCount}_counter`,
+          target: target.targetname,
+          threshold: 1,
+          origin
+        });
+      }
+    }
     buttonCount ++;
-  } else if (entity.file.startsWith("instances/p2editor/faith_plate_floor")) {
+  } else if (entity.file && entity.file.startsWith("instances/p2editor/faith_plate_floor")) {
     /**
      * Faith plates are simulated by placing a boulder with negative speed
      * inside of the hole that the faith plate instance creates. For some
@@ -597,6 +631,52 @@ function parseEditorEntity (entity) {
       speed: -1,
       axis_choice: 5
     });
+  } else if (entity.classname === "trigger_hurt" && entity.targetname && entity.targetname.startsWith("barrierhazard")) {
+    /**
+     * Laser grids are constructed similarly to doors in the Hammer parser.
+     * That is, a trigger volume is created and connected to a NOT gate
+     * through a counter. When touched before the gate has flipped, it
+     * triggers PlayerRespawn to restart the level.
+     */
+    // Remove the "_brush" postfix to make outputs target the brush directly
+    const name = entity.targetname.slice(0, -6);
+    // First, create the trigger using the shape of this brush
+    const sides = entity.solid.side.map(s => Side.fromVMF(s).scale(unitScale));
+    output += `{\n"classname" "area_trigger"\n`;
+    output += `"targetname" "${name}__NDtrigger"\n`;
+    output += `"target" "${name}__NDcounter"\n`;
+    output += `{\n`;
+    output += sides.join("\n");
+    output += `\n}\n}\n`;
+    /**
+     * Proceed only if the logic hasn't already been built for this laser
+     * field. These usually consist of multiple triggers, but creating new
+     * logic entities for each one breaks due to having identical targets.
+     */
+    if (!output.includes(`"targetname" "${name}__NDcounter"`)) {
+      // Create the counter, activated by the trigger and the gate
+      createEntity({
+        classname: "counter",
+        targetname: name + "__NDcounter",
+        target: "PlayerRespawn",
+        threshold: 2
+      });
+      // Create the gate, pointing to the counter
+      createNotGate(name, name + "__NDcounter", name + "__NDtext");
+      // Create a text popup indicating when the laser grid gets disabled
+      createEntity({
+        classname: "game_text",
+        targetname: name + "__NDtext",
+        message: "LASER FIELD DISABLED",
+        origin
+      });
+    }
+  } else if ("solid" in entity && typeof entity.solid === "object") {
+    // Push unhandled brush entities to the world's solids list
+    json.world.solid.push(entity.solid);
+  } else {
+    // Forward miscellaneous unhandled entities to the Hammer parser
+    parseHammerEntity(entity);
   }
 
 }
@@ -772,39 +852,18 @@ function parseHammerEntity (entity) {
         origin
       });
     }
+  } else if ("solid" in entity && typeof entity.solid === "object") {
+    // Push unhandled brush entities to the world's solids list
+    json.world.solid.push(entity.solid);
   }
 
 }
 
 // Iterates through all map entities and parses them for conversion
 for (const entity of json.entity) {
-
-  /**
-   * If a solid is found, this is a brush entity - push it to the world's
-   * solids list to be handled later as a regular brush. Narbacular Drop
-   * has no support for dynamic brushes, anyway.
-   */
-  if ("solid" in entity && typeof entity.solid === "object") {
-    json.world.solid.push(entity.solid);
-    continue;
-  }
-
-  // Call the relevant point entity parsing function
   if (isPTI) parseEditorEntity(entity);
   else parseHammerEntity(entity);
-
 }
-
-/**
- * Once we're done spawning all entities (and therefore buttons),
- * create a `counter` linking all buttons to the exit door.
- */
-createEntity({
-  classname: "counter",
-  targetname: "exit_counter",
-  target: "exit_door",
-  threshold: buttonCount
-});
 
 // Iterates through all solids and adds them to the output map string
 for (const solid of json.world.solid) {
