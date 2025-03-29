@@ -94,6 +94,8 @@ const unitScale = 1.5;
 let buttonCount = 0;
 // Holds the .map file output string
 let output = "";
+// Holds output string for solids that are part of worldspawn
+let worldSolids = "";
 
 /**
  * Utility class - a simple Vector3 implementation.
@@ -251,9 +253,10 @@ class Material {
   // Given a Portal 2 material path, returns the corresponding ND texture.
   static convert (path) {
     if (path.startsWith("tools/")) return "AAATRIGGER";
-    if (path.startsWith("effects/")) return "AAATRIGGER";
+    if (path.startsWith("effects/") && path !== "effects/laserplane") return "AAATRIGGER";
     if (path.startsWith("dev/")) return "AAATRIGGER";
     if (useDefaultTextures) {
+      if (path === "effects/laserplane") return "CHAINLINK";
       if (path.startsWith("metal/black")) return "METAL_PANEL1";
       if (path.startsWith("tile/white_wall")) return "ROCK_WALL1";
       if (path.startsWith("tile/white_floor")) return "DIRT_FLOOR3";
@@ -361,7 +364,8 @@ function createEntity (keyvalues) {
 }
 
 /**
- * Appends data for a brush entity to mapfile output.
+ * Appends data for a brush entity to either map file output or
+ * worldspawn solids list, based on input parameters.
  *
  * @param {object} keyvalues Table of key/value pairs
  * @param {Vector} origin Center of brush, after unit scaling
@@ -374,22 +378,32 @@ function createBrush (keyvalues, origin, size, materials = Material.AAATRIGGER) 
   if (!Array.isArray(materials)) materials = (new Array(6)).fill(materials);
   while (materials.length < 6) materials.push(Material.AAATRIGGER);
 
-  // Define the entity and its keyvalues
-  output += "{\n"
-  for (const key in keyvalues) {
-    output += `"${key}" "${keyvalues[key]}"\n`
+  // Holds the output string to be appended to `output` or `worldSolids`
+  let string = "";
+
+  // If keyvalues were provided, construct string for entity and keyvalues
+  if (keyvalues) {
+    string += "{\n"
+    for (const key in keyvalues) {
+      string += `"${key}" "${keyvalues[key]}"\n`
+    }
   }
 
   // Huge prebuilt block for defining the brush planes
   // Actually doing the math for this would've been overkill
-  output += `{
-( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${materials[4]} [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1 \n\
-( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ${materials[5]} [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1 \n\
-( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ${materials[1]} [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
-( ${size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${materials[0]} [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
-( ${size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ${materials[2]} [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
-( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${materials[3]} [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1 \n\
-}\n}\n`;
+  string += `{
+( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${materials[4]} [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 ${0.25 * unitScale} ${0.25 * unitScale} \n\
+( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ${materials[5]} [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 ${0.25 * unitScale} ${0.25 * unitScale} \n\
+( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ${materials[1]} [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 ${0.25 * unitScale} ${0.25 * unitScale} \n\
+( ${size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${materials[0]} [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 ${0.25 * unitScale} ${0.25 * unitScale} \n\
+( ${size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${size.y + origin.y} ${size.z + origin.z} ) ( ${-size.x + origin.x} ${size.y + origin.y} ${-size.z + origin.z} ) ${materials[2]} [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 ${0.25 * unitScale} ${0.25 * unitScale} \n\
+( ${size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${-size.z + origin.z} ) ( ${-size.x + origin.x} ${-size.y + origin.y} ${size.z + origin.z} ) ${materials[3]} [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 ${0.25 * unitScale} ${0.25 * unitScale} \n\
+}\n`;
+  if (keyvalues) string += "}\n";
+
+  // Append the constructed string to the chosen output
+  if (keyvalues) output += string;
+  else worldSolids += string;
 
 }
 
@@ -513,6 +527,39 @@ function createNotGate (input, output, indicator = null) {
 }
 
 /**
+ * Constructs a system that, when triggered, fires its output as one pulse,
+ * and then remains inactive forever.
+ *
+ * @param {string} input Targetname of the pulse latch
+ * @param {string} output Name of entity targeted by the pulse latch
+ */
+function createPulseLatch (input, output) {
+
+  // Place the latch far outside of world bounds, offset by `gateCount`
+  const origin = new Vector(65536 - 512 * gateCount, 65536, 65536);
+
+  // Lava turtle for pressing down the button
+  createEntity({
+    classname: "lava_turtle",
+    speed: 0,
+    origin
+  });
+  // Lava, acting as the input - moves the turtle up into the button
+  createBrush({
+    classname: "func_lava",
+    targetname: input
+  }, origin.copy().add(new Vector(0, 0, -16)), new Vector(96, 96, 16), Material.AAATRIGGER);
+  // Button for sending the output pulse, uses flag 1 ("Only Once")
+  createEntity({
+    classname: "button_standard",
+    target: output,
+    spawnflags: 1,
+    origin: origin.copy().add(new Vector(0, 0, 96))
+  });
+
+}
+
+/**
  * Given a Source entity from a PTI map, converts it to its equivalent in
  * Narbacular Drop and appends its data to the output string.
  *
@@ -631,7 +678,7 @@ function parseEditorEntity (entity) {
       speed: -1,
       axis_choice: 5
     });
-  } else if (entity.classname === "trigger_hurt" && entity.targetname && entity.targetname.startsWith("barrierhazard")) {
+  } else if (entity.classname === "func_brush" && entity.targetname && entity.targetname.startsWith("barrierhazard")) {
     /**
      * Laser grids are constructed similarly to doors in the Hammer parser.
      * That is, a trigger volume is created and connected to a NOT gate
@@ -648,6 +695,8 @@ function parseEditorEntity (entity) {
     output += `{\n`;
     output += sides.join("\n");
     output += `\n}\n}\n`;
+    // Create a worldspawn solid to texture the trigger
+    worldSolids += `{\n${sides.join("\n")}\n}\n`;
     /**
      * Proceed only if the logic hasn't already been built for this laser
      * field. These usually consist of multiple triggers, but creating new
@@ -729,11 +778,14 @@ function parseHammerEntity (entity) {
     }
     buttonCount ++;
   } else if (entity.classname === "prop_testchamber_door") {
-    if (!entity.targetname.includes("just_enough_door_for_the_job")) return;
     /**
      * Doors are replaced with "reset triggers" connected to a NOT gate.
      * This effectively means that attempting to pass through a door will
      * restart the level unless that door has received the input to open.
+     *
+     * There's some other fancy magic here for displaying text popups and
+     * requiring the player to be near the door for it to actually unlock,
+     * but the core system consists of a trigger, counter, and a NOT gate.
      */
     // Calculate proportions of door trigger
     const bpos = origin.copy().add(new Vector(0, 0, 64 * unitScale));
@@ -745,8 +797,10 @@ function parseHammerEntity (entity) {
     createBrush({
       classname: "area_trigger",
       targetname: entity.targetname + "__NDtrigger",
-      target: entity.targetname + "__NDcounter"
+      target: entity.targetname + "__NDcounter1"
     }, bpos, size, Material.AAATRIGGER);
+    // Create a visual, non-solid laser grid covering the trigger
+    createBrush(null, bpos, size, new Material("effects/laserplane"));
     /**
      * Create a portal blocker and a one-way gate for the door to prevent
      * the player from shooting past the door. This is done by creating a
@@ -761,10 +815,10 @@ function parseHammerEntity (entity) {
       classname: "collidable_geometry",
       sfx_type: 1
     }, bpos.copy().sub(fvec.copy().scale(16 * unitScale)), size, blockerMaterials);
-    // Create the counter, activated by the trigger and the gate
+    // Create two counters, both activated by the trigger plus the gate
     createEntity({
       classname: "counter",
-      targetname: entity.targetname + "__NDcounter",
+      targetname: entity.targetname + "__NDcounter1",
       target: "PlayerRespawn",
       threshold: 2
     });
@@ -773,12 +827,53 @@ function parseHammerEntity (entity) {
      * counter, disabling the reset trigger, as the trigger alone cannot
      * satisfy the condition of the counter.
      */
-    createNotGate(entity.targetname, entity.targetname + "__NDcounter", entity.targetname + "__NDtext");
-    // Create a text popup for when the door has opened
+    createNotGate(entity.targetname + "__NDgate", entity.targetname + "__NDcounter1", entity.targetname + "__NDtext1");
+    /**
+     * Create a counter + relay combo acting as input handlers for the
+     * door. For this to trigger, the door has to be triggered and the
+     * player has to be near it.
+     *
+     * For a simpler implementation omitting the proximity trigger,
+     * everything below here can be skipped as long as you set the input
+     * of the gate to be the targetname of the door.
+     */
+    createEntity({
+      classname: "counter",
+      targetname: entity.targetname + "__NDcounter2",
+      target: entity.targetname + "__NDgate",
+      threshold: 2
+    });
+    // Create a relay linking the door's targetname to the counter
+    // This is needed for wiring the pulse latch later
+    createEntity({
+      classname: "counter",
+      targetname: entity.targetname,
+      target: entity.targetname + "__NDcounter2",
+      threshold: 1
+    });
+    // Create another trigger for detecting when the player is nearby
+    createBrush({
+      classname: "area_trigger",
+      target: entity.targetname + "__NDcounter2"
+    }, bpos.copy().add(fvec.copy().scale(64 * unitScale)), (new Vector(64, 64, 64)).scale(unitScale));
+    /**
+     * Create a pulse latch for displaying a text popup once the door is
+     * unlocked, asking the player to approach the laser grid. This uses
+     * the targetname of the door, letting it trigger as soon as the door
+     * would normally open.
+     */
+    createPulseLatch(entity.targetname, entity.targetname + "__NDtext2");
+    // Create text popups for indicating door state
     createEntity({
       classname: "game_text",
-      targetname: entity.targetname + "__NDtext",
-      message: "A DOOR HAS OPENED",
+      targetname: entity.targetname + "__NDtext1",
+      message: "LASER FIELD DISABLED",
+      origin
+    });
+    createEntity({
+      classname: "game_text",
+      targetname: entity.targetname + "__NDtext2",
+      message: "APPROACH LASER FIELD TO DISABLE IT",
       origin
     });
   } else if (entity.classname === "prop_weighted_cube") {
@@ -954,7 +1049,7 @@ output = `{
 "classname" "worldspawn"
 "mapversion" "220"
 "wad" "${toolsPath}/narbaculardrop.wad"
-}
+${worldSolids}}
 ${output}`;
 
 // Write out the .map file for parsing with csg.exe
