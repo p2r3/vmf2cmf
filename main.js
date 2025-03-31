@@ -606,7 +606,7 @@ function parseEditorEntity (entity) {
       target: "exit_door",
       threshold
     });
-  } else if (entity.file && entity.file.startsWith("instances/p2editor/light_strip") && false) {
+  } else if (entity.file && entity.file.startsWith("instances/p2editor/light_strip")) {
     // Player-placed light strips are converted to point lights
     createEntity({
       classname: "light_point",
