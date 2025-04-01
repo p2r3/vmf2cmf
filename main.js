@@ -560,6 +560,8 @@ function createPulseLatch (input, output) {
     origin: origin.copy().add(new Vector(0, 0, 96))
   });
 
+  gateCount ++;
+
 }
 
 /**
