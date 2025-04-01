@@ -573,7 +573,7 @@ function createPulseLatch (input, output) {
 function parseEditorEntity (entity) {
 
   // Get the origin as a Vector
-  const origin = Vector.fromString(entity.origin);
+  const origin = entity.origin ? Vector.fromString(entity.origin) : new Vector();
   origin.scale(unitScale);
 
   if (entity.file && entity.file.startsWith("instances/p2editor/door_entrance")) {
