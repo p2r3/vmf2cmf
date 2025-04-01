@@ -521,7 +521,7 @@ function createNotGate (input, output, indicator = null) {
       classname: "button_standard",
       target: indicator,
       spawnflags: 1,
-      origin: origin.copy().add(new Vector(0, 0, 176))
+      origin: origin.copy().add(new Vector(0, 0, 180))
     });
   }
 
