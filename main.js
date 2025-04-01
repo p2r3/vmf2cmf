@@ -252,7 +252,10 @@ class Material {
 
   // Given a Portal 2 material path, returns the corresponding ND texture.
   static convert (path) {
-    if (path.startsWith("tools/")) return "AAATRIGGER";
+    if (path.startsWith("tools/")) {
+      if (path === "tools/toolsskybox") return Material.MISSING.toString();
+      return "AAATRIGGER";
+    }
     if (path.startsWith("effects/") && path !== "effects/laserplane") return "AAATRIGGER";
     if (path.startsWith("dev/")) return "AAATRIGGER";
     if (useDefaultTextures) {
