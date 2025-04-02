@@ -37,6 +37,7 @@ Below is a list of supported map elements and features. Anything not mentioned h
 - **Basic lighting** - note that in PTI, only manually placed light strips emit light.
 - **Laser fields (PTI)** - similarly to doors, these remain disabled when opened.
 - **Exit door (PTI)** - always faces South (default orientation), remains open when triggered.
+- **Toxic goo** - all brushes with toxic slime materials are replaced with lava.
 
 _Note: PTI stands for "Perpetual Testing Initiative", i.e. the Portal 2 in-game level editor._
 
