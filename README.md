@@ -26,6 +26,20 @@ The easiest way to obtain VMF files for converting is to decompile campaign maps
 
 If you want to build custom chambers with the Portal 2 in-game level editor, there's no need to decompile anything. In fact, the results are better if you don't. Build your chamber, then preview it. This will create a file at `Portal 2/sdk_content/maps/preview.vmf` - you can feed that directly to this tool.
 
+_Note: if you're on Linux, the level editor is broken in the latest Portal 2 release. Either use the "demo_viewer" beta, or switch to Proton._
+
+## Features and known issues
+Below is a list of supported map elements and features. Anything not mentioned here is likely unimplemented.
+- **Brushes** - note that per-face surface properties apply only to simple (axis-aligned) geometries.
+- **Cubes** - except certain templates and PTI droppers. Use cubes without droppers in the editor.
+- **Floor buttons** - except those not mounted on the floor.
+- **Chamber doors** - behave as one-way laser fields, remain disabled when opened.
+- **Basic lighting** - note that in PTI, only manually placed light strips emit light.
+- **Laser fields (PTI)** - similarly to doors, these remain disabled when opened.
+- **Exit door (PTI)** - always faces South (default orientation), remains open when triggered.
+
+_Note: PTI stands for "Perpetual Testing Initiative", i.e. the Portal 2 in-game level editor._
+
 ## Contributing
 Contributions for optimizations and features are welcome, but please first open an issue stating what you're planning on doing. This lets me decide whether and how the change you're introducing should be introduced _before_ you've already written the code for it, and also allows for open discussion about implementation details.
 
