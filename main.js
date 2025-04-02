@@ -258,6 +258,7 @@ class Material {
     }
     if (path.startsWith("effects/") && path !== "effects/laserplane") return "AAATRIGGER";
     if (path.startsWith("dev/")) return "AAATRIGGER";
+    if (path.startsWith("nature/toxicslime")) return "AAATRIGGER";
     if (useDefaultTextures) {
       if (path === "effects/laserplane") return "CHAINLINK";
       if (path.startsWith("metal/black")) return "METAL_PANEL1";
@@ -289,6 +290,7 @@ class Material {
     this.nbTexture = Material.convert(this.p2Material);
     this.noportal = surfaceProperties.noportal.includes(useDefaultTextures ? this.nbTexture : this.p2Material);
     this.seethrough = surfaceProperties.seethrough.includes(useDefaultTextures ? this.nbTexture : this.p2Material);
+    this.lava = this.p2Material.startsWith("nature/toxicslime");
     Material.map[this.nbTexture] = this.p2Material;
   }
 
@@ -981,6 +983,8 @@ for (const solid of json.world.solid) {
    * The first disproving factor is if the amount of sides is not exactly 6.
    */
   let isWall = solid.side.length === 6;
+  // Whether this solid should be func_lava - determined later by textures
+  let isLava = false;
 
   // Array of Side objects, representing the sides of this solid
   const solidSides = solid.side.map(s => Side.fromVMF(s).scale(unitScale));
@@ -994,6 +998,14 @@ for (const solid of json.world.solid) {
     axes.push(axis);
     // If this side isn't axis aligned, the solid can't be a wall
     if (axis === null) isWall = false;
+
+    // If at least one of the materials is lava, this must be func_lava
+    if (side.material.lava) {
+      isWall = false;
+      isLava = true;
+      // Break the loop, we don't care about other material properties
+      break;
+    }
 
     // If at least one of the materials is portalable, a collidable_geometry
     // created from this brush would have to be portalable.
@@ -1032,13 +1044,15 @@ for (const solid of json.world.solid) {
   } else {
     /**
      * Complex geometries are ironically much simpler - we simply dump all
-     * of the sides into a single `collidable_geometry` entity and set
-     * the properties accordingly.
+     * of the sides into a single `collidable_geometry` (or `func_lava`)
+     * entity and set the properties accordingly.
      * The tradeoff is that these are less flexible.
      */
-    output += `{\n"classname" "collidable_geometry"\n`;
-    if (!portalable) output += `"sfx_type" "1"\n`;
-    if (seethrough) output += `"spawnflags" "1"\n`;
+    output += `{\n"classname" "${isLava ? "func_lava": "collidable_geometry"}"\n`;
+    if (!isLava) {
+      if (!portalable) output += `"sfx_type" "1"\n`;
+      if (seethrough) output += `"spawnflags" "1"\n`;
+    }
     output += `{\n`;
     output += solidSides.join("\n");
     output += `\n}\n}\n`;
