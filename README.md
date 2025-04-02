@@ -34,10 +34,11 @@ Below is a list of supported map elements and features. Anything not mentioned h
 - **Cubes** - except certain templates and PTI droppers. Use cubes without droppers in the editor.
 - **Floor buttons** - except those not mounted on the floor.
 - **Chamber doors** - behave as one-way laser fields, remain disabled when opened.
+- **Faith plates** - only players get catapulted, launch direction is not consistent.
 - **Basic lighting** - note that in PTI, only manually placed light strips emit light.
+- **Toxic goo** - all brushes with toxic slime materials are replaced with lava.
 - **Laser fields (PTI)** - similarly to doors, these remain disabled when opened.
 - **Exit door (PTI)** - always faces South (default orientation), remains open when triggered.
-- **Toxic goo** - all brushes with toxic slime materials are replaced with lava.
 
 _Note: PTI stands for "Perpetual Testing Initiative", i.e. the Portal 2 in-game level editor._
 
