@@ -287,6 +287,14 @@ class Material {
   // Constructs the Material instance from a Portal 2 material path
   constructor (p2Material) {
     this.p2Material = p2Material.toLowerCase().replace("\\", "/");
+    /**
+     * This glass texture is only available in the DLC VPKs, which
+     * vpk2wad_nd doesn't export from by default. We replace it with what
+     * seems to be the only visibly functional glass texture.
+     */
+    if (this.p2Material === "glass/glasswindow007a_less_shiny") {
+      this.p2Material = "glass/glasswindow_frosted_002b";
+    }
     this.nbTexture = Material.convert(this.p2Material);
     this.noportal = surfaceProperties.noportal.includes(useDefaultTextures ? this.nbTexture : this.p2Material);
     this.seethrough = surfaceProperties.seethrough.includes(useDefaultTextures ? this.nbTexture : this.p2Material);
