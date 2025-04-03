@@ -1,92 +1,12 @@
-const { $ } = require("bun");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
+const { exec } = require('node:child_process');
 const unzipper = require("unzipper");
 
-// Download Narbacular Drop level creation kit on for first launch
-const toolsPath = `${__dirname}/nb_tools`;
-if (!fs.existsSync(toolsPath)) {
-
-  console.log("Downloading Narbacular Drop level creation kit...");
-  const response = await fetch("https://nuclearmonkeysoftware.com/downloads/narbacular_drop_level_creation_kit.zip");
-  if (response.status !== 200) {
-    throw "Failed to download level creation kit, HTTP status " + response.status;
-  }
-  const buffer = await response.arrayBuffer();
-
-  // Create the output directory and file only when the download succeeds
-  fs.mkdirSync(toolsPath);
-  await Bun.write(`${toolsPath}/kit.zip`, buffer);
-
-  // Extract the archive
-  console.log("Extracting...");
-  const archive = await unzipper.Open.file(`${toolsPath}/kit.zip`);
-  await archive.extract({ path: toolsPath });
-
-  // Remove unnecessary files
-  await $`rm "${toolsPath}/kit.zip"`.quiet();
-  await $`rm "${toolsPath}/Read Me.txt"`.quiet();
-  await $`rm -rf "${toolsPath}/FGDs"`.quiet();
-  await $`rm -rf "${toolsPath}/RMF"`.quiet();
-  await $`mv "${toolsPath}/WADs/narbaculardrop.wad" "${toolsPath}/narbaculardrop.wad"`.quiet();
-  await $`mv "${toolsPath}/Map Parser/csg.exe" "${toolsPath}/csg.exe"`.quiet();
-  await $`rm -rf "${toolsPath}/WADs"`.quiet();
-  await $`rm -rf "${toolsPath}/Map Parser"`.quiet();
-
-}
-
-// Whether to use built-in textures - inferred from size of WAD
-const useDefaultTextures = Bun.file(`${toolsPath}/narbaculardrop.wad`).size === 3362364;
-
-// Ideally this would be an npm dependency, but the import seems broken
-const vmfParserPath = `${__dirname}/vmfparser`;
-if (!fs.existsSync(vmfParserPath)) {
-
-  console.log("Downloading vmfparser (by @leops)...");
-  // We need this commit specifically, the TS refactor broke something
-  const response = await fetch("https://github.com/leops/vmfparser/archive/79fe5e3af8917eb09cb36566eb3f5a8109d23efa.zip");
-  if (response.status !== 200) {
-    throw "Failed to download vmfparser, HTTP status " + response.status;
-  }
-  const buffer = await response.arrayBuffer();
-
-  // Create the output file only when the download succeeds
-  await Bun.write(`${__dirname}/vmfparser.zip`, buffer);
-
-  // Extract the archive
-  console.log("Extracting...");
-  const archive = await unzipper.Open.file(`${__dirname}/vmfparser.zip`);
-  await archive.extract({ path: __dirname });
-  // The archive extracts to a subdirectory, we rename that
-  await $`mv "${__dirname}/vmfparser-79fe5e3af8917eb09cb36566eb3f5a8109d23efa" "${vmfParserPath}"`.quiet();
-  // Remove the archive after extracting
-  await $`rm "${__dirname}/vmfparser.zip"`;
-
-}
-// Include vmfparser library downloaded above
-const vmfparser = require(`${vmfParserPath}/src/index`);
-
-// Get input/output file paths from command line
-const inputFilePath = process.argv[2];
-if (!inputFilePath) throw "Please provide an input VMF path.";
-// If no output path was provided, use renamed input path
-const outputFilePath = process.argv[3] || (inputFilePath.replace(".vmf", "") + ".cmf");
-
-// Fetch material lists separated by relevant surface properties
-const surfaceProperties = !useDefaultTextures ? {
-  noportal: (await Bun.file(`${toolsPath}/noportal.txt`).text()).split("\n"),
-  seethrough: (await Bun.file(`${toolsPath}/seethrough.txt`).text()).split("\n")
-} : {
-  noportal: ["CHAINLINK", "METAL_PANEL1", "METAL_PANEL2", "METAL_PANEL3", "METAL_PANEL4"],
-  seethrough: ["CHAINLINK"]
-};
-
-// Parse the VMF data to JSON
-const vmf = await Bun.file(inputFilePath).text();
-const json = vmfparser(vmf);
-
-// Check for PTI map - this is not an exhaustive test!!
-const isPTI = vmf.includes("instances/p2editor/elevator_exit.vmf");
+const toolsPath = __dirname + '/nb_tools';
+const vmfParserPath = __dirname + '/vmfparser';
+var useDefaultTextures, inputFilePath, inputFilePath, outputFilePath, json;
+var surfaceProperties = { noportal: [], seethrough: [] };
 
 // Constant by which to scale world, 1.5 is a good default
 const unitScale = 1.5;
@@ -96,6 +16,238 @@ let buttonCount = 0;
 let output = "";
 // Holds output string for solids that are part of worldspawn
 let worldSolids = "";
+// Amount of physical "gate" contraptions present in the world, see below
+let gateCount = 0;
+
+async function main() {
+  // Download Narbacular Drop level creation kit on for first launch
+  if (!fs.existsSync(toolsPath)) {
+    console.log("Downloading Narbacular Drop level creation kit...");
+    const response = await fetch("https://nuclearmonkeysoftware.com/downloads/narbacular_drop_level_creation_kit.zip");
+    if (response.status !== 200) {
+      console.error("Failed to download level creation kit, HTTP status " + response.status);
+      process.exit(1);
+    }
+
+    // Create the output directory and file only when the download succeeds
+    fs.mkdirSync(toolsPath);
+    fs.writeFileSync(toolsPath + '/kit.zip', Buffer.from(await response.arrayBuffer()));
+
+    // Extract the archive
+    console.log("Extracting...");
+    const archive = await unzipper.Open.file(toolsPath + '/kit.zip');
+    await archive.extract({ path: toolsPath });
+
+    // Remove unnecessary files
+    fs.unlinkSync(toolsPath + '/kit.zip');
+    fs.unlinkSync(toolsPath + '/Read Me.txt');
+    fs.rmSync(toolsPath + '/FGDs', { recursive: true, force: true });
+    fs.rmSync(toolsPath + '/RMF', { recursive: true, force: true });
+    fs.renameSync(toolsPath + '/WADs/narbaculardrop.wad', toolsPath + '/narbaculardrop.wad');
+    fs.renameSync(toolsPath + '/Map Parser/csg.exe', toolsPath + '/csg.exe');
+    fs.rmSync(toolsPath + '/WADs', { recursive: true, force: true });
+    fs.rmSync(toolsPath + '/Map Parser', { recursive: true, force: true });
+  }
+
+  // Whether to use built-in textures - inferred from size of WAD
+  useDefaultTextures = fs.statSync(toolsPath + '/narbaculardrop.wad').size === 3362364;
+
+  // Ideally this would be an npm dependency, but the import seems broken
+  if (!fs.existsSync(vmfParserPath)) {
+    console.log("Downloading vmfparser (by @leops)...");
+    // We need this commit specifically, the TS refactor broke something
+    const response = await fetch("https://github.com/leops/vmfparser/archive/79fe5e3af8917eb09cb36566eb3f5a8109d23efa.zip");
+    if (response.status !== 200) {
+      console.error("Failed to download vmfparser, HTTP status " + response.status);
+      process.exit(1);
+    }
+
+    // Create the output file only when the download succeeds
+    fs.writeFileSync(__dirname + '/vmfparser.zip', Buffer.from(await response.arrayBuffer()));
+
+    // Extract the archive
+    console.log("Extracting...");
+    const archive = await unzipper.Open.file(__dirname + '/vmfparser.zip');
+    await archive.extract({ path: __dirname });
+    // The archive extracts to a subdirectory, we rename that
+    fs.renameSync(__dirname + '/vmfparser-79fe5e3af8917eb09cb36566eb3f5a8109d23efa', vmfParserPath);
+    // Remove the archive after extracting
+    fs.unlinkSync(__dirname + '/vmfparser.zip');
+
+  }
+  // Include vmfparser library downloaded above
+  const vmfparser = require(vmfParserPath + '/src/index');
+
+  // Get input/output file paths from command line
+  inputFilePath = process.argv[2];
+  if (!inputFilePath) {
+    console.error("Please provide an input VMF path.");
+    process.exit(1);
+  }
+  // If no output path was provided, use renamed input path
+  outputFilePath = process.argv[3] || (inputFilePath.replace(".vmf", "") + ".cmf");
+
+  // Fetch material lists separated by relevant surface properties
+  const surfaceProperties = !useDefaultTextures ? {
+    noportal: fs.readFileSync(toolsPath + '/noportal.txt', 'utf8').split("\n"),
+    seethrough: fs.readFileSync(toolsPath + '/seethrough.txt', 'utf8').split("\n")
+  } : {
+    noportal: ["CHAINLINK", "METAL_PANEL1", "METAL_PANEL2", "METAL_PANEL3", "METAL_PANEL4"],
+    seethrough: ["CHAINLINK"]
+  };
+
+  // Parse the VMF data to JSON
+  const vmf = fs.readFileSync(inputFilePath, 'utf8');
+  json = vmfparser(vmf);
+
+  // Check for PTI map - this is not an exhaustive test!!
+  const isPTI = vmf.includes("instances/p2editor/elevator_exit.vmf");
+  
+  
+  
+  // Iterates through all map entities and parses them for conversion
+  for (const entity of json.entity) {
+    if (isPTI) parseEditorEntity(entity);
+    else parseHammerEntity(entity);
+  }
+
+  // Iterates through all solids and adds them to the output map string
+  for (const solid of json.world.solid) {
+    // Solids without sides aren't possible in Narbacular Drop
+    if (!solid.side) continue;
+
+    /**
+     * Whether the solid is portalable and/or seethrough.
+     * Used only for `collidable_geometry`.
+     */
+    let portalable = false, seethrough = false;
+    /**
+     * Whether this solid is an axis-aligned wall. We start by assuming that
+     * it is, and then aim to disprove that as we iterate over all sides.
+     * The first disproving factor is if the amount of sides is not exactly 6.
+     */
+    let isWall = solid.side.length === 6;
+    // Whether this solid should be func_lava - determined later by textures
+    let isLava = false;
+
+    // Array of Side objects, representing the sides of this solid
+    const solidSides = solid.side.map(s => Side.fromVMF(s).scale(unitScale));
+    // Array of axis indices for each of the sides
+    const axes = [];
+
+    for (const side of solidSides) {
+
+      // Determine the facing axis of this side from its normal vector
+      const axis = side.plane.getNormal().getAxis();
+      axes.push(axis);
+      // If this side isn't axis aligned, the solid can't be a wall
+      if (axis === null) isWall = false;
+
+      // If at least one of the materials is lava, this must be func_lava
+      if (side.material.lava) {
+        isWall = false;
+        isLava = true;
+        // Break the loop, we don't care about other material properties
+        break;
+      }
+
+      // If at least one of the materials is portalable, a collidable_geometry
+      // created from this brush would have to be portalable.
+      if (!side.material.noportal) portalable = true;
+      // If at least one of the materials is seethrough, this must be a
+      // collidable_geometry and therefore cannot be a wall.
+      if (side.material.seethrough) {
+        seethrough = true;
+        isWall = false;
+      }
+
+    }
+
+    if (isWall) {
+      /**
+       * For axis-aligned walls, we create up to 6 brush entities
+       * representing each side of the wall. This allows for per-face
+       * portalability, and prevents some glitches with collidable_geometry.
+       */
+      for (let i = 0; i < solidSides.length; i ++) {
+        const side = solidSides[i];
+        const axis = axes[i];
+
+        // Skip faces that aren't going to be rendered anyway
+        if (side.material.toString() === "AAATRIGGER") continue;
+
+        // Define the brush entity and add it to the output map file string
+        output += `{\n"classname" "func_wall"\n`;
+        output += `"axis_choice" "${axis}"\n`;
+        output += `"wall_type" "${side.material.noportal ? 1 : 0}"\n`;
+        output += "{\n";
+        output += solidSides.join("\n");
+        output += "\n}\n}\n";
+
+      }
+    } else {
+      /**
+       * Complex geometries are ironically much simpler - we simply dump all
+       * of the sides into a single `collidable_geometry` (or `func_lava`)
+       * entity and set the properties accordingly.
+       * The tradeoff is that these are less flexible.
+       */
+      output += `{\n"classname" "${isLava ? "func_lava": "collidable_geometry"}"\n`;
+      if (!isLava) {
+        if (!portalable) output += '"sfx_type" "1"\n';
+        if (seethrough) output += '"spawnflags" "1"\n';
+      }
+      output += '{\n';
+      output += solidSides.join("\n");
+      output += '\n}\n}\n';
+    }
+
+  }
+
+  /**
+   * The map file output starts with a basic `worldspawn` header, points to
+   * the local WAD, and then follows the output string built earlier.
+   */
+  output = `{
+"classname" "worldspawn"
+"mapversion" "220"
+"wad" "${toolsPath}/narbaculardrop.wad"
+${worldSolids}}
+${output}`;
+
+  // Write out the .map file for parsing with csg.exe
+  const mapFilePath = inputFilePath.replace(".vmf", "") + ".map";
+  fs.writeFileSync(mapFilePath, output);
+
+  let stdout = "";
+  do {
+    // If a texture failed to be found, replace it and try again
+    if (stdout) {
+      const texture = stdout.split("Unable to find texture ")[1].split("!")[0];
+      console.warn(`Recompiling without ${texture} (${Material.map[texture]})...`);
+      // If the placeholder texture is missing, something has gone wrong
+      if (texture === Material.MISSING.toString()) {
+        console.error("Aborting: WAD is missing crucial textures.");
+        break;
+      }
+      output = output.replaceAll(texture, Material.MISSING.toString());
+      fs.writeFileSync(mapFilePath, output);
+    }
+    // On Linux, run csg.exe with Wine
+    exec(`${process.platform === "linux" ? "wine" : ""} "${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`, (err, out) => {
+      if(err) {
+        console.error(err);
+        process.exit(1);
+      }
+      stdout = out;
+    });
+    // Continue recompiling until texture issues are gone
+  } while (stdout.includes("Unable to find texture "));
+
+  // Display only the final command output
+  console.log(stdout);
+}
+
 
 /**
  * Utility class - a simple Vector3 implementation.
@@ -484,9 +636,6 @@ function traceConnection (outputs, entities = []) {
   return entities;
 
 }
-
-// Amount of physical "gate" contraptions present in the world, see below
-let gateCount = 0;
 
 /**
  * Constructs a "NOT" gate and appends it to the output map file.
@@ -969,139 +1118,4 @@ function parseHammerEntity (entity) {
 
 }
 
-// Iterates through all map entities and parses them for conversion
-for (const entity of json.entity) {
-  if (isPTI) parseEditorEntity(entity);
-  else parseHammerEntity(entity);
-}
-
-// Iterates through all solids and adds them to the output map string
-for (const solid of json.world.solid) {
-  // Solids without sides aren't possible in Narbacular Drop
-  if (!solid.side) continue;
-
-  /**
-   * Whether the solid is portalable and/or seethrough.
-   * Used only for `collidable_geometry`.
-   */
-  let portalable = false, seethrough = false;
-  /**
-   * Whether this solid is an axis-aligned wall. We start by assuming that
-   * it is, and then aim to disprove that as we iterate over all sides.
-   * The first disproving factor is if the amount of sides is not exactly 6.
-   */
-  let isWall = solid.side.length === 6;
-  // Whether this solid should be func_lava - determined later by textures
-  let isLava = false;
-
-  // Array of Side objects, representing the sides of this solid
-  const solidSides = solid.side.map(s => Side.fromVMF(s).scale(unitScale));
-  // Array of axis indices for each of the sides
-  const axes = [];
-
-  for (const side of solidSides) {
-
-    // Determine the facing axis of this side from its normal vector
-    const axis = side.plane.getNormal().getAxis();
-    axes.push(axis);
-    // If this side isn't axis aligned, the solid can't be a wall
-    if (axis === null) isWall = false;
-
-    // If at least one of the materials is lava, this must be func_lava
-    if (side.material.lava) {
-      isWall = false;
-      isLava = true;
-      // Break the loop, we don't care about other material properties
-      break;
-    }
-
-    // If at least one of the materials is portalable, a collidable_geometry
-    // created from this brush would have to be portalable.
-    if (!side.material.noportal) portalable = true;
-    // If at least one of the materials is seethrough, this must be a
-    // collidable_geometry and therefore cannot be a wall.
-    if (side.material.seethrough) {
-      seethrough = true;
-      isWall = false;
-    }
-
-  }
-
-  if (isWall) {
-    /**
-     * For axis-aligned walls, we create up to 6 brush entities
-     * representing each side of the wall. This allows for per-face
-     * portalability, and prevents some glitches with collidable_geometry.
-     */
-    for (let i = 0; i < solidSides.length; i ++) {
-      const side = solidSides[i];
-      const axis = axes[i];
-
-      // Skip faces that aren't going to be rendered anyway
-      if (side.material.toString() === "AAATRIGGER") continue;
-
-      // Define the brush entity and add it to the output map file string
-      output += `{\n"classname" "func_wall"\n`;
-      output += `"axis_choice" "${axis}"\n`;
-      output += `"wall_type" "${side.material.noportal ? 1 : 0}"\n`;
-      output += "{\n";
-      output += solidSides.join("\n");
-      output += "\n}\n}\n";
-
-    }
-  } else {
-    /**
-     * Complex geometries are ironically much simpler - we simply dump all
-     * of the sides into a single `collidable_geometry` (or `func_lava`)
-     * entity and set the properties accordingly.
-     * The tradeoff is that these are less flexible.
-     */
-    output += `{\n"classname" "${isLava ? "func_lava": "collidable_geometry"}"\n`;
-    if (!isLava) {
-      if (!portalable) output += `"sfx_type" "1"\n`;
-      if (seethrough) output += `"spawnflags" "1"\n`;
-    }
-    output += `{\n`;
-    output += solidSides.join("\n");
-    output += `\n}\n}\n`;
-  }
-
-}
-
-/**
- * The map file output starts with a basic `worldspawn` header, points to
- * the local WAD, and then follows the output string built earlier.
- */
-output = `{
-"classname" "worldspawn"
-"mapversion" "220"
-"wad" "${toolsPath}/narbaculardrop.wad"
-${worldSolids}}
-${output}`;
-
-// Write out the .map file for parsing with csg.exe
-const mapFilePath = inputFilePath.replace(".vmf", "") + ".map";
-await Bun.write(mapFilePath, output);
-
-let stdout = "";
-do {
-  // If a texture failed to be found, replace it and try again
-  if (stdout) {
-    const texture = stdout.split("Unable to find texture ")[1].split("!")[0];
-    console.warn(`Recompiling without ${texture} (${Material.map[texture]})...`);
-    // If the placeholder texture is missing, something has gone wrong
-    if (texture === Material.MISSING.toString()) {
-      console.error("Aborting: WAD is missing crucial textures.");
-      break;
-    }
-    output = output.replaceAll(texture, Material.MISSING.toString());
-    await Bun.write(mapFilePath, output);
-  }
-  // On Linux, run csg.exe with Wine
-  const cmd = await $`${process.platform === "linux" ? "wine" : ""} "${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`.quiet();
-  stdout = cmd.stdout.toString();
-  // Continue recompiling until texture issues are gone
-} while (stdout.includes("Unable to find texture "));
-
-// Display only the final command output
-console.log(stdout);
+main();
