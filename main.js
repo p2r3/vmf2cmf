@@ -1,11 +1,11 @@
 const fs = require("node:fs");
 const crypto = require("node:crypto");
-const { exec } = require('node:child_process');
+const { execSync } = require("node:child_process");
 const unzipper = require("unzipper");
 
-const toolsPath = __dirname + '/nb_tools';
-const vmfParserPath = __dirname + '/vmfparser';
-var useDefaultTextures, inputFilePath, inputFilePath, outputFilePath, json;
+const toolsPath = __dirname + "/nb_tools";
+const vmfParserPath = __dirname + "/vmfparser";
+var useDefaultTextures, inputFilePath, outputFilePath, json;
 var surfaceProperties = { noportal: [], seethrough: [] };
 
 // Constant by which to scale world, 1.5 is a good default
@@ -19,7 +19,7 @@ let worldSolids = "";
 // Amount of physical "gate" contraptions present in the world, see below
 let gateCount = 0;
 
-async function main() {
+async function main () {
   // Download Narbacular Drop level creation kit on for first launch
   if (!fs.existsSync(toolsPath)) {
     console.log("Downloading Narbacular Drop level creation kit...");
@@ -31,26 +31,26 @@ async function main() {
 
     // Create the output directory and file only when the download succeeds
     fs.mkdirSync(toolsPath);
-    fs.writeFileSync(toolsPath + '/kit.zip', Buffer.from(await response.arrayBuffer()));
+    fs.writeFileSync(toolsPath + "/kit.zip", Buffer.from(await response.arrayBuffer()));
 
     // Extract the archive
     console.log("Extracting...");
-    const archive = await unzipper.Open.file(toolsPath + '/kit.zip');
+    const archive = await unzipper.Open.file(toolsPath + "/kit.zip");
     await archive.extract({ path: toolsPath });
 
     // Remove unnecessary files
-    fs.unlinkSync(toolsPath + '/kit.zip');
-    fs.unlinkSync(toolsPath + '/Read Me.txt');
-    fs.rmSync(toolsPath + '/FGDs', { recursive: true, force: true });
-    fs.rmSync(toolsPath + '/RMF', { recursive: true, force: true });
-    fs.renameSync(toolsPath + '/WADs/narbaculardrop.wad', toolsPath + '/narbaculardrop.wad');
-    fs.renameSync(toolsPath + '/Map Parser/csg.exe', toolsPath + '/csg.exe');
-    fs.rmSync(toolsPath + '/WADs', { recursive: true, force: true });
-    fs.rmSync(toolsPath + '/Map Parser', { recursive: true, force: true });
+    fs.unlinkSync(toolsPath + "/kit.zip");
+    fs.unlinkSync(toolsPath + "/Read Me.txt");
+    fs.rmSync(toolsPath + "/FGDs", { recursive: true, force: true });
+    fs.rmSync(toolsPath + "/RMF", { recursive: true, force: true });
+    fs.renameSync(toolsPath + "/WADs/narbaculardrop.wad", toolsPath + "/narbaculardrop.wad");
+    fs.renameSync(toolsPath + "/Map Parser/csg.exe", toolsPath + "/csg.exe");
+    fs.rmSync(toolsPath + "/WADs", { recursive: true, force: true });
+    fs.rmSync(toolsPath + "/Map Parser", { recursive: true, force: true });
   }
 
   // Whether to use built-in textures - inferred from size of WAD
-  useDefaultTextures = fs.statSync(toolsPath + '/narbaculardrop.wad').size === 3362364;
+  useDefaultTextures = fs.statSync(toolsPath + "/narbaculardrop.wad").size === 3362364;
 
   // Ideally this would be an npm dependency, but the import seems broken
   if (!fs.existsSync(vmfParserPath)) {
@@ -63,20 +63,20 @@ async function main() {
     }
 
     // Create the output file only when the download succeeds
-    fs.writeFileSync(__dirname + '/vmfparser.zip', Buffer.from(await response.arrayBuffer()));
+    fs.writeFileSync(__dirname + "/vmfparser.zip", Buffer.from(await response.arrayBuffer()));
 
     // Extract the archive
     console.log("Extracting...");
-    const archive = await unzipper.Open.file(__dirname + '/vmfparser.zip');
+    const archive = await unzipper.Open.file(__dirname + "/vmfparser.zip");
     await archive.extract({ path: __dirname });
     // The archive extracts to a subdirectory, we rename that
-    fs.renameSync(__dirname + '/vmfparser-79fe5e3af8917eb09cb36566eb3f5a8109d23efa', vmfParserPath);
+    fs.renameSync(__dirname + "/vmfparser-79fe5e3af8917eb09cb36566eb3f5a8109d23efa", vmfParserPath);
     // Remove the archive after extracting
-    fs.unlinkSync(__dirname + '/vmfparser.zip');
+    fs.unlinkSync(__dirname + "/vmfparser.zip");
 
   }
   // Include vmfparser library downloaded above
-  const vmfparser = require(vmfParserPath + '/src/index');
+  const vmfparser = require(vmfParserPath + "/src/index");
 
   // Get input/output file paths from command line
   inputFilePath = process.argv[2];
@@ -88,23 +88,21 @@ async function main() {
   outputFilePath = process.argv[3] || (inputFilePath.replace(".vmf", "") + ".cmf");
 
   // Fetch material lists separated by relevant surface properties
-  const surfaceProperties = !useDefaultTextures ? {
-    noportal: fs.readFileSync(toolsPath + '/noportal.txt', 'utf8').split("\n"),
-    seethrough: fs.readFileSync(toolsPath + '/seethrough.txt', 'utf8').split("\n")
+  surfaceProperties = !useDefaultTextures ? {
+    noportal: fs.readFileSync(toolsPath + "/noportal.txt", "utf8").split("\n"),
+    seethrough: fs.readFileSync(toolsPath + "/seethrough.txt", "utf8").split("\n")
   } : {
     noportal: ["CHAINLINK", "METAL_PANEL1", "METAL_PANEL2", "METAL_PANEL3", "METAL_PANEL4"],
     seethrough: ["CHAINLINK"]
   };
 
   // Parse the VMF data to JSON
-  const vmf = fs.readFileSync(inputFilePath, 'utf8');
+  const vmf = fs.readFileSync(inputFilePath, "utf8");
   json = vmfparser(vmf);
 
   // Check for PTI map - this is not an exhaustive test!!
   const isPTI = vmf.includes("instances/p2editor/elevator_exit.vmf");
-  
-  
-  
+
   // Iterates through all map entities and parses them for conversion
   for (const entity of json.entity) {
     if (isPTI) parseEditorEntity(entity);
@@ -197,9 +195,9 @@ async function main() {
         if (!portalable) output += '"sfx_type" "1"\n';
         if (seethrough) output += '"spawnflags" "1"\n';
       }
-      output += '{\n';
+      output += "{\n";
       output += solidSides.join("\n");
-      output += '\n}\n}\n';
+      output += "\n}\n}\n";
     }
 
   }
@@ -234,7 +232,7 @@ ${output}`;
       fs.writeFileSync(mapFilePath, output);
     }
     // On Linux, run csg.exe with Wine
-    exec(`${process.platform === "linux" ? "wine" : ""} "${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`, (err, out) => {
+    execSync(`${process.platform === "linux" ? "wine" : ""} "${toolsPath}/csg.exe" "${mapFilePath}" "${outputFilePath}"`, (err, out) => {
       if(err) {
         console.error(err);
         process.exit(1);
@@ -856,9 +854,9 @@ function parseEditorEntity (entity) {
     output += `{\n"classname" "area_trigger"\n`;
     output += `"targetname" "${name}__NDtrigger"\n`;
     output += `"target" "${name}__NDcounter"\n`;
-    output += `{\n`;
+    output += "{\n";
     output += sides.join("\n");
-    output += `\n}\n}\n`;
+    output += "\n}\n}\n";
     // Create a worldspawn solid to texture the trigger
     worldSolids += `{\n${sides.join("\n")}\n}\n`;
     /**
