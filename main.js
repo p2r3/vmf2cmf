@@ -20,6 +20,7 @@ let worldSolids = "";
 let gateCount = 0;
 
 async function main () {
+
   // Download Narbacular Drop level creation kit on for first launch
   if (!fs.existsSync(toolsPath)) {
     console.log("Downloading Narbacular Drop level creation kit...");
@@ -244,6 +245,7 @@ ${output}`;
 
   // Display only the final command output
   console.log(stdout);
+
 }
 
 
