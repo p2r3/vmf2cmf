@@ -4,7 +4,7 @@ const crypto = require("node:crypto");
 const unzipper = require("unzipper");
 
 // Download Narbacular Drop level creation kit on for first launch
-const toolsPath = `${__dirname}/nb_tools`;
+const toolsPath = `${__dirname}/nd_tools`;
 if (!fs.existsSync(toolsPath)) {
 
   console.log("Downloading Narbacular Drop level creation kit...");
