@@ -3,7 +3,7 @@ const crypto = require("node:crypto");
 const { execSync } = require("node:child_process");
 const unzipper = require("unzipper");
 
-const toolsPath = `${__dirname}/nb_tools`;
+const toolsPath = `${__dirname}/nd_tools`;
 const vmfParserPath = `${__dirname}/vmfparser`;
 var useDefaultTextures, inputFilePath, outputFilePath, json;
 var surfaceProperties = { noportal: [], seethrough: [] };
